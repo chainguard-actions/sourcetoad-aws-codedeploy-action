@@ -1,0 +1,30 @@
+name: Test basic dry run with directory
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          aws_access_key: 'AKIAIOSFODNN7EXAMPLE'
+          aws_secret_key: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+          aws_region: 'us-east-1'
+          s3_bucket: 'my-test-bucket'
+          s3_folder: 'my-test-folder'
+          directory: '.'
+          codedeploy_name: 'my-app'
+          codedeploy_group: 'my-deployment-group'
+          dry_run: 'true'
+      - name: Assert zip_filename output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
+        run: |
+          echo "zip_filename: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected zip_filename to be non-empty"
+            exit 1
+          fi
+          echo "PASS"
