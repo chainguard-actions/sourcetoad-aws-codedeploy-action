@@ -1,0 +1,34 @@
+name: Test dry-run with pre-built archive
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create pre-built archive
+        run: |
+          echo "app content" > /tmp/app.txt
+          zip /tmp/my-archive.zip /tmp/app.txt
+      - id: action
+        uses: .
+        with:
+          aws_access_key: 'AKIAIOSFODNN7EXAMPLE'
+          aws_secret_key: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+          aws_region: 'us-east-1'
+          s3_bucket: 'my-test-bucket'
+          s3_folder: 'my-test-folder'
+          codedeploy_name: 'my-app'
+          codedeploy_group: 'my-group'
+          archive: '/tmp/my-archive.zip'
+          dry_run: 'true'
+      - name: Assert zip_filename output is set
+        env:
+          ZIP_FILENAME: ${{ steps.action.outputs.zip_filename }}
+        run: |
+          echo "zip_filename: $ZIP_FILENAME"
+          if [ -z "$ZIP_FILENAME" ]; then
+            echo "FAIL: expected zip_filename to be non-empty"
+            exit 1
+          fi
+          echo "PASS"
