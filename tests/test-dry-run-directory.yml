@@ -1,0 +1,37 @@
+name: Test dry-run with directory and zip options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create test directory
+        run: |
+          mkdir -p /tmp/test-deploy-dir
+          echo "hello" > /tmp/test-deploy-dir/app.txt
+      - id: action
+        uses: .
+        with:
+          aws_access_key: 'AKIAIOSFODNN7EXAMPLE'
+          aws_secret_key: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+          aws_region: 'us-east-1'
+          s3_bucket: 'my-test-bucket'
+          s3_folder: 'my-test-folder'
+          codedeploy_name: 'my-app'
+          codedeploy_group: 'my-deployment-group'
+          directory: '/tmp/test-deploy-dir'
+          excluded_files: '.git README.md'
+          custom_zip_flags: '-r'
+          codedeploy_config_name: 'CodeDeployDefault.AllAtOnce'
+          dry_run: 'true'
+      - name: Assert zip_filename output is set
+        env:
+          ZIP_FILENAME: ${{ steps.action.outputs.zip_filename }}
+        run: |
+          echo "zip_filename: $ZIP_FILENAME"
+          if [ -z "$ZIP_FILENAME" ]; then
+            echo "FAIL: expected zip_filename to be set"
+            exit 1
+          fi
+          echo "PASS"
