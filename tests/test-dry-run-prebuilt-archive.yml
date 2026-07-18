@@ -1,0 +1,46 @@
+name: Test dry-run with pre-built archive
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create a zip archive containing appspec.yml
+      - name: Create pre-built archive
+        run: |
+          mkdir -p /tmp/deploy-pkg
+          cat > /tmp/deploy-pkg/appspec.yml <<'EOF'
+          version: 0.0
+          os: linux
+          files:
+            - source: /
+              destination: /var/www/app
+          EOF
+          echo "hello world" > /tmp/deploy-pkg/index.html
+          cd /tmp/deploy-pkg
+          zip -r "$GITHUB_WORKSPACE/my-deployment.zip" .
+          echo "Archive created:"
+          ls -lh "$GITHUB_WORKSPACE/my-deployment.zip"
+
+      - id: action
+        uses: .
+        with:
+          s3_bucket: my-test-bucket
+          s3_folder: my-test-folder
+          archive: my-deployment.zip
+          codedeploy_name: my-app
+          codedeploy_group: my-group
+          dry_run: 'true'
+
+      - name: Assert zip_filename output matches provided archive
+        env:
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
+        run: |
+          echo "actual zip_filename: $ACTUAL"
+          if [ "$ACTUAL" != "my-deployment.zip" ]; then
+            echo "FAIL: expected zip_filename to be 'my-deployment.zip', got: '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: zip_filename=$ACTUAL"

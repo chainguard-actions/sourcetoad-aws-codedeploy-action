@@ -1,0 +1,57 @@
+name: Test dry-run basic (archive directory)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create a minimal deployment directory with appspec.yml
+      - name: Create deployment directory
+        run: |
+          mkdir -p deploy-app
+          cat > deploy-app/appspec.yml <<'EOF'
+          version: 0.0
+          os: linux
+          files:
+            - source: /
+              destination: /var/www/app
+          EOF
+          echo "hello world" > deploy-app/index.html
+
+      - id: action
+        uses: .
+        with:
+          s3_bucket: my-test-bucket
+          s3_folder: my-test-folder
+          directory: deploy-app
+          codedeploy_name: my-app
+          codedeploy_group: my-group
+          dry_run: 'true'
+
+      - name: Assert zip_filename output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
+        run: |
+          echo "actual zip_filename: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected zip_filename output to be non-empty"
+            exit 1
+          fi
+          echo "PASS: zip_filename=$ACTUAL"
+
+      - name: Assert zip_filename ends with .zip
+        env:
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
+        run: |
+          echo "actual zip_filename: $ACTUAL"
+          case "$ACTUAL" in
+            *.zip)
+              echo "PASS: zip_filename ends with .zip"
+              ;;
+            *)
+              echo "FAIL: expected zip_filename to end with .zip, got: $ACTUAL"
+              exit 1
+              ;;
+          esac

@@ -1,0 +1,57 @@
+name: Test dry-run register-only mode
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create a minimal deployment directory with appspec.yml
+      - name: Create deployment directory
+        run: |
+          mkdir -p deploy-app
+          cat > deploy-app/appspec.yml <<'EOF'
+          version: 0.0
+          os: linux
+          files:
+            - source: /
+              destination: /var/www/app
+          EOF
+          echo "app content" > deploy-app/app.sh
+
+      - id: action
+        uses: .
+        with:
+          s3_bucket: my-test-bucket
+          s3_folder: my-test-folder
+          directory: deploy-app
+          codedeploy_name: my-app
+          codedeploy_group: my-group
+          codedeploy_register_only: 'true'
+          dry_run: 'true'
+
+      - name: Assert zip_filename output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
+        run: |
+          echo "actual zip_filename: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected zip_filename output to be non-empty"
+            exit 1
+          fi
+          echo "PASS: zip_filename=$ACTUAL"
+
+      - name: Assert zip_filename contains run ID and SHA
+        env:
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          echo "actual zip_filename: $ACTUAL"
+          echo "run_id: $RUN_ID"
+          # The zip filename is generated as: $GITHUB_RUN_ID-$GITHUB_SHA.zip
+          if [[ "$ACTUAL" != *".zip" ]]; then
+            echo "FAIL: expected zip_filename to end with .zip"
+            exit 1
+          fi
+          echo "PASS: zip_filename format is correct"

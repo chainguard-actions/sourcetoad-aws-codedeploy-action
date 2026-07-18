@@ -1,0 +1,55 @@
+name: Test dry-run with pre-existing archive
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a pre-existing archive with appspec.yml
+        run: |
+          mkdir -p /tmp/test-archive-src
+          cp tests/fixtures/app/appspec.yml /tmp/test-archive-src/appspec.yml
+          cp tests/fixtures/app/index.html /tmp/test-archive-src/index.html
+          cd /tmp/test-archive-src
+          zip -r /tmp/my-deployment.zip .
+          echo "Archive created:"
+          ls -lh /tmp/my-deployment.zip
+
+      - id: action
+        uses: .
+        with:
+          aws_region: us-east-1
+          s3_bucket: my-test-bucket
+          s3_folder: my-test-folder
+          archive: /tmp/my-deployment.zip
+          codedeploy_name: my-app
+          codedeploy_group: my-group
+          dry_run: 'true'
+
+      - name: Assert zip_filename output matches the provided archive
+        env:
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
+        run: |
+          echo "actual zip_filename: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: zip_filename output was empty"
+            exit 1
+          fi
+          if [ "$ACTUAL" != "/tmp/my-deployment.zip" ]; then
+            echo "FAIL: expected zip_filename to be '/tmp/my-deployment.zip', got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: zip_filename=$ACTUAL"
+
+      - name: Assert etag output is empty (dry_run skips S3 upload)
+        env:
+          ACTUAL: ${{ steps.action.outputs.etag }}
+        run: |
+          echo "actual etag: $ACTUAL"
+          if [ -n "$ACTUAL" ]; then
+            echo "FAIL: etag should be empty in dry_run mode, got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: etag is empty as expected in dry_run mode"

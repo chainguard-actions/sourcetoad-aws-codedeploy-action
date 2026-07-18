@@ -1,0 +1,56 @@
+name: Test dry-run with directory
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          aws_region: us-east-1
+          s3_bucket: my-test-bucket
+          s3_folder: my-test-folder
+          directory: tests/fixtures/app
+          codedeploy_name: my-app
+          codedeploy_group: my-group
+          dry_run: 'true'
+
+      - name: Assert zip_filename output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
+        run: |
+          echo "actual zip_filename: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: zip_filename output was empty"
+            exit 1
+          fi
+          if [[ "$ACTUAL" != *.zip ]]; then
+            echo "FAIL: zip_filename does not end with .zip: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: zip_filename=$ACTUAL"
+
+      - name: Assert etag output is empty (dry_run skips S3 upload)
+        env:
+          ACTUAL: ${{ steps.action.outputs.etag }}
+        run: |
+          echo "actual etag: $ACTUAL"
+          if [ -n "$ACTUAL" ]; then
+            echo "FAIL: etag should be empty in dry_run mode, got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: etag is empty as expected in dry_run mode"
+
+      - name: Assert deployment_id output is empty (dry_run skips deployment)
+        env:
+          ACTUAL: ${{ steps.action.outputs.deployment_id }}
+        run: |
+          echo "actual deployment_id: $ACTUAL"
+          if [ -n "$ACTUAL" ]; then
+            echo "FAIL: deployment_id should be empty in dry_run mode, got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: deployment_id is empty as expected in dry_run mode"
