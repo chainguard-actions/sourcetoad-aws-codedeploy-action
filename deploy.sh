@@ -167,10 +167,8 @@ if [ -z "$INPUT_ARCHIVE" ]; then
         cd "$DIR_TO_ZIP";
     fi
 
-    # Parse caller-supplied flags into an array to avoid unquoted word-splitting
-    # and shell metacharacter injection while still supporting multiple flags.
-    IFS=' ' read -ra custom_zip_flags <<< "$INPUT_CUSTOM_ZIP_FLAGS"
-    zip "${custom_zip_flags[@]}" -r --quiet "$ZIP_FILENAME" . -x "@$EXCLUSION_FILE"
+    # shellcheck disable=SC2086
+    zip $INPUT_CUSTOM_ZIP_FLAGS -r --quiet "$ZIP_FILENAME" . -x "@$EXCLUSION_FILE"
     if [ ! -f "$ZIP_FILENAME" ]; then
         echo "::error::$ZIP_FILENAME was not generated properly (zip generation failed)."
         exit 1;

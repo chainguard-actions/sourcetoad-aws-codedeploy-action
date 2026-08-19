@@ -1,4 +1,4 @@
-name: Test dry-run with pre-existing archive
+name: Test dry-run with pre-existing archive input
 on:
   workflow_dispatch:
 jobs:
@@ -6,29 +6,56 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Create test archive
+        with:
+          fetch-depth: 0
+
+      - name: Set up git origin reachable inside Docker container
         run: |
-          echo "hello" > /tmp/app.txt
-          zip /tmp/test-archive.zip /tmp/app.txt
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          rm -rf "$GITHUB_WORKSPACE/.git-remote"
+          git init --bare "$GITHUB_WORKSPACE/.git-remote"
+          git push "$GITHUB_WORKSPACE/.git-remote" HEAD:refs/heads/act-harness
+          git remote set-url origin "$GITHUB_WORKSPACE/.git-remote" 2>/dev/null || \
+            git remote add origin "$GITHUB_WORKSPACE/.git-remote"
+
+      - name: Create a pre-built zip archive with appspec.yml
+        run: |
+          mkdir -p /tmp/deploy-pkg
+          cat > /tmp/deploy-pkg/appspec.yml << 'EOF'
+          version: 0.0
+          os: linux
+          files:
+            - source: /
+              destination: /var/www/app
+          EOF
+          echo "app content" > /tmp/deploy-pkg/app.txt
+          cd /tmp/deploy-pkg
+          zip -r "$GITHUB_WORKSPACE/my-deployment.zip" .
+          echo "Created zip:"
+          ls -la "$GITHUB_WORKSPACE/my-deployment.zip"
+
       - id: action
         uses: .
         with:
-          aws_access_key: 'AKIAIOSFODNN7EXAMPLE'
-          aws_secret_key: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
-          aws_region: 'us-east-1'
-          s3_bucket: 'my-test-bucket'
-          s3_folder: 'my-test-folder'
-          codedeploy_name: 'my-app'
-          codedeploy_group: 'my-deployment-group'
-          archive: '/tmp/test-archive.zip'
+          s3_bucket: 'test-bucket'
+          s3_folder: 'test-folder'
+          codedeploy_name: 'test-app'
+          codedeploy_group: 'test-group'
+          archive: 'my-deployment.zip'
           dry_run: 'true'
-      - name: Assert zip_filename output is set
+
+      - name: Assert zip_filename matches provided archive name
         env:
-          ZIP_FILENAME: ${{ steps.action.outputs.zip_filename }}
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
         run: |
-          echo "zip_filename: $ZIP_FILENAME"
-          if [ -z "$ZIP_FILENAME" ]; then
-            echo "FAIL: expected zip_filename to be set"
+          echo "actual zip_filename: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected zip_filename to be non-empty"
             exit 1
           fi
-          echo "PASS"
+          if [ "$ACTUAL" != "my-deployment.zip" ]; then
+            echo "FAIL: expected zip_filename to be 'my-deployment.zip', got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: zip_filename correctly set to provided archive name: $ACTUAL"

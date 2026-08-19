@@ -6,24 +6,71 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up git origin reachable inside Docker container
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          rm -rf "$GITHUB_WORKSPACE/.git-remote"
+          git init --bare "$GITHUB_WORKSPACE/.git-remote"
+          git push "$GITHUB_WORKSPACE/.git-remote" HEAD:refs/heads/act-harness
+          git remote set-url origin "$GITHUB_WORKSPACE/.git-remote" 2>/dev/null || \
+            git remote add origin "$GITHUB_WORKSPACE/.git-remote"
+
+      - name: Create appspec.yml for zip validation
+        run: |
+          cat > "$GITHUB_WORKSPACE/appspec.yml" << 'EOF'
+          version: 0.0
+          os: linux
+          files:
+            - source: /
+              destination: /var/www/app
+          EOF
+
       - id: action
         uses: .
         with:
-          aws_access_key: 'AKIAIOSFODNN7EXAMPLE'
-          aws_secret_key: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
-          aws_region: 'us-east-1'
-          s3_bucket: 'my-test-bucket'
-          s3_folder: 'my-test-folder'
-          codedeploy_name: 'my-app'
-          codedeploy_group: 'my-deployment-group'
+          s3_bucket: 'test-bucket'
+          s3_folder: 'test-folder'
+          codedeploy_name: 'test-app'
+          codedeploy_group: 'test-group'
           dry_run: 'true'
+
       - name: Assert zip_filename output is set
         env:
-          ZIP_FILENAME: ${{ steps.action.outputs.zip_filename }}
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
         run: |
-          echo "zip_filename: $ZIP_FILENAME"
-          if [ -z "$ZIP_FILENAME" ]; then
-            echo "FAIL: expected zip_filename to be set"
+          echo "actual zip_filename: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected zip_filename to be non-empty"
             exit 1
           fi
-          echo "PASS"
+          if [[ "$ACTUAL" != *.zip ]]; then
+            echo "FAIL: expected zip_filename to end with .zip, got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: zip_filename=$ACTUAL"
+
+      - name: Assert etag is empty (dry_run skips S3 upload)
+        env:
+          ACTUAL: ${{ steps.action.outputs.etag }}
+        run: |
+          echo "actual etag: $ACTUAL"
+          if [ -n "$ACTUAL" ]; then
+            echo "FAIL: expected etag to be empty in dry_run mode, got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: etag is empty as expected for dry_run"
+
+      - name: Assert deployment_id is empty (dry_run skips deployment)
+        env:
+          ACTUAL: ${{ steps.action.outputs.deployment_id }}
+        run: |
+          echo "actual deployment_id: $ACTUAL"
+          if [ -n "$ACTUAL" ]; then
+            echo "FAIL: expected deployment_id to be empty in dry_run mode, got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: deployment_id is empty as expected for dry_run"

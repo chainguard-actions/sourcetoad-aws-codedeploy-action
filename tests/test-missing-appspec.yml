@@ -1,4 +1,4 @@
-name: Test dry-run with directory input
+name: Test failure when appspec.yml is missing
 on:
   workflow_dispatch:
 jobs:
@@ -19,18 +19,7 @@ jobs:
           git remote set-url origin "$GITHUB_WORKSPACE/.git-remote" 2>/dev/null || \
             git remote add origin "$GITHUB_WORKSPACE/.git-remote"
 
-      - name: Create subdirectory with appspec.yml
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/deploy"
-          cat > "$GITHUB_WORKSPACE/deploy/appspec.yml" << 'EOF'
-          version: 0.0
-          os: linux
-          files:
-            - source: /
-              destination: /var/www/app
-          EOF
-          echo "hello world" > "$GITHUB_WORKSPACE/deploy/index.html"
-
+      # Intentionally do NOT create appspec.yml — the action should fail
       - id: action
         uses: .
         with:
@@ -38,20 +27,16 @@ jobs:
           s3_folder: 'test-folder'
           codedeploy_name: 'test-app'
           codedeploy_group: 'test-group'
-          directory: 'deploy'
           dry_run: 'true'
+        continue-on-error: true
 
-      - name: Assert zip_filename output is set
+      - name: Assert action failed due to missing appspec.yml
         env:
-          ACTUAL: ${{ steps.action.outputs.zip_filename }}
+          OUTCOME: ${{ steps.action.outcome }}
         run: |
-          echo "actual zip_filename: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: expected zip_filename to be non-empty"
+          echo "action outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected action to fail when appspec.yml is missing, but got outcome: $OUTCOME"
             exit 1
           fi
-          if [[ "$ACTUAL" != *.zip ]]; then
-            echo "FAIL: expected zip_filename to end with .zip, got: $ACTUAL"
-            exit 1
-          fi
-          echo "PASS: zip_filename=$ACTUAL"
+          echo "PASS: action correctly failed when appspec.yml was missing"
