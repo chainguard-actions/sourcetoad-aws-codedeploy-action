@@ -167,9 +167,12 @@ if [ -z "$INPUT_ARCHIVE" ]; then
         cd "$DIR_TO_ZIP";
     fi
 
-    # Split custom zip flags safely into an array to avoid word-splitting/glob injection
-    IFS=' ' read -r -a CUSTOM_ZIP_FLAGS_ARRAY <<< "$INPUT_CUSTOM_ZIP_FLAGS"
-    zip "${CUSTOM_ZIP_FLAGS_ARRAY[@]}" -r --quiet "$ZIP_FILENAME" . -x "@$EXCLUSION_FILE"
+    # Build zip flags array to safely handle optional custom flags without word-splitting injection
+    zip_flags=()
+    if [ -n "$INPUT_CUSTOM_ZIP_FLAGS" ]; then
+        read -ra zip_flags <<< "$INPUT_CUSTOM_ZIP_FLAGS"
+    fi
+    zip "${zip_flags[@]}" -r --quiet "$ZIP_FILENAME" . -x "@$EXCLUSION_FILE"
     if [ ! -f "$ZIP_FILENAME" ]; then
         echo "::error::$ZIP_FILENAME was not generated properly (zip generation failed)."
         exit 1;
@@ -214,7 +217,7 @@ safe_zip_filename=$(printf '%s' "$ZIP_FILENAME" | tr -d '\n\r')
 echo "zip_filename=$safe_zip_filename" >> "$GITHUB_OUTPUT"
 
 # 3) Upload the deployment to S3, drop old archive.
-if [ "$INPUT_DRY_RUN" = "true" ]; then
+if "$INPUT_DRY_RUN"; then
     echo "::debug::Dry Run detected. Exiting."
     exit 0;
 fi
@@ -226,8 +229,7 @@ echo "::debug::Zip uploaded to S3."
 ZIP_ETAG=$(getArchiveETag)
 
 echo "::debug::Obtained ETag of uploaded S3 Zip Archive."
-safe_zip_etag=$(printf '%s' "$ZIP_ETAG" | tr -d '\n\r')
-echo "etag=$safe_zip_etag" >> "$GITHUB_OUTPUT"
+echo "etag=$ZIP_ETAG" >> "$GITHUB_OUTPUT"
 
 rm "$ZIP_FILENAME"
 
@@ -237,7 +239,7 @@ echo "::debug::Removed old local ZIP Archive."
 pollForActiveDeployments
 
 # 5) Poll / Complete
-if [ "$INPUT_CODEDEPLOY_REGISTER_ONLY" = "true" ]; then
+if $INPUT_CODEDEPLOY_REGISTER_ONLY; then
     echo -e "${BLUE}Registering deployment to ${RESET_TEXT}$INPUT_CODEDEPLOY_GROUP.";
     registerRevision
     echo -e "${BLUE}Registered deployment to ${RESET_TEXT}$INPUT_CODEDEPLOY_GROUP!";
@@ -249,8 +251,7 @@ else
         DEPLOYMENT_ID=$(deployRevision)
     fi
 
-    safe_deployment_id=$(printf '%s' "$DEPLOYMENT_ID" | tr -d '\n\r')
-    echo "deployment_id=$safe_deployment_id" >> "$GITHUB_OUTPUT"
+    echo "deployment_id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
 
     if [ "$INPUT_MAX_POLLING_ITERATIONS" -eq "0" ]; then
         echo -e "${BLUE}Iterations at 0. GitHub Action ending, but deployment in-progress to: ${RESET_TEXT}$INPUT_CODEDEPLOY_GROUP.";

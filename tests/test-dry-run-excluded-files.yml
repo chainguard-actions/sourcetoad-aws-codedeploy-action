@@ -1,0 +1,51 @@
+name: Test dry run with excluded files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Add extra files to excluded fixture directory
+        run: |
+          echo "secret content" > "$GITHUB_WORKSPACE/tests/fixtures/deploy-excluded/secrets.env"
+          echo "test content" > "$GITHUB_WORKSPACE/tests/fixtures/deploy-excluded/test.log"
+          echo "app content" > "$GITHUB_WORKSPACE/tests/fixtures/deploy-excluded/app.js"
+
+      - id: action
+        uses: .
+        with:
+          s3_bucket: my-test-bucket
+          s3_folder: my-folder
+          directory: tests/fixtures/deploy-excluded
+          codedeploy_name: my-app
+          codedeploy_group: staging
+          excluded_files: 'secrets.env test.log'
+          dry_run: 'true'
+
+      - name: Assert zip_filename output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
+        run: |
+          echo "actual zip_filename: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: zip_filename output was empty"
+            exit 1
+          fi
+          if [[ "$ACTUAL" != *.zip ]]; then
+            echo "FAIL: zip_filename does not end with .zip, got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: zip_filename=$ACTUAL"
+
+      - name: Assert etag is not set (dry run skips S3 upload)
+        env:
+          ACTUAL: ${{ steps.action.outputs.etag }}
+        run: |
+          echo "actual etag: $ACTUAL"
+          if [ -n "$ACTUAL" ]; then
+            echo "FAIL: etag should be empty in dry_run mode, got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: etag is empty as expected in dry_run mode"
