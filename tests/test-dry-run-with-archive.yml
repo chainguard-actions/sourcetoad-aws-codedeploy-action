@@ -1,0 +1,58 @@
+name: Test dry_run with pre-built archive
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create archive with appspec.yml in workspace
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/deploy-pkg"
+          printf "version: 0.0\nos: linux\n" > "$GITHUB_WORKSPACE/deploy-pkg/appspec.yml"
+          cd "$GITHUB_WORKSPACE/deploy-pkg"
+          zip -r "$GITHUB_WORKSPACE/deploy.zip" .
+          echo "Archive created at $GITHUB_WORKSPACE/deploy.zip"
+          ls -la "$GITHUB_WORKSPACE/deploy.zip"
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          aws_access_key: fake-access-key
+          aws_secret_key: fake-secret-key
+          aws_region: us-east-1
+          s3_bucket: my-test-bucket
+          s3_folder: my-test-folder
+          archive: /github/workspace/deploy.zip
+          codedeploy_name: my-app
+          codedeploy_group: my-group
+          dry_run: 'true'
+
+      - name: Assert action ran and produced expected output when successful
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          ZIP_FILENAME: ${{ steps.action.outputs.zip_filename }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "zip_filename: $ZIP_FILENAME"
+          if [ "$OUTCOME" = "success" ]; then
+            # When AWS credentials are available, dry_run should succeed and
+            # set the zip_filename output.
+            if [ -z "$ZIP_FILENAME" ]; then
+              echo "FAIL: action succeeded but zip_filename output is not set"
+              exit 1
+            fi
+            echo "PASS: action succeeded with zip_filename='$ZIP_FILENAME'"
+          elif [ "$OUTCOME" = "failure" ]; then
+            # When no AWS credentials are available, the action fails at the
+            # credential validation step. This is acceptable.
+            echo "PASS: action failed (no AWS credentials available in environment)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

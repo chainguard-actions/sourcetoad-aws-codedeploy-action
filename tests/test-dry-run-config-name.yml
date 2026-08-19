@@ -1,4 +1,4 @@
-name: Test dry-run basic usage
+name: Test dry-run with codedeploy config name override
 on:
   workflow_dispatch:
 jobs:
@@ -9,24 +9,25 @@ jobs:
 
       - name: Create deploy directory with appspec.yml
         run: |
-          mkdir -p deploy-app
-          cat > deploy-app/appspec.yml <<'EOF'
+          mkdir -p deploy-app-configname
+          cat > deploy-app-configname/appspec.yml <<'EOF'
           version: 0.0
           os: linux
           files:
             - source: /
               destination: /var/www/app
           EOF
-          echo "hello world" > deploy-app/index.html
+          echo "hello world" > deploy-app-configname/index.html
 
       - id: action
         uses: .
         with:
           s3_bucket: my-test-bucket
           s3_folder: my-test-folder
-          directory: deploy-app
+          directory: deploy-app-configname
           codedeploy_name: my-app
           codedeploy_group: my-group
+          codedeploy_config_name: CodeDeployDefault.AllAtOnce
           dry_run: 'true'
 
       - name: Assert zip_filename output is set

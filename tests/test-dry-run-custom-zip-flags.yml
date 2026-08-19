@@ -1,4 +1,4 @@
-name: Test dry-run basic usage
+name: Test dry-run with custom zip flags
 on:
   workflow_dispatch:
 jobs:
@@ -9,24 +9,25 @@ jobs:
 
       - name: Create deploy directory with appspec.yml
         run: |
-          mkdir -p deploy-app
-          cat > deploy-app/appspec.yml <<'EOF'
+          mkdir -p deploy-app-zipflags
+          cat > deploy-app-zipflags/appspec.yml <<'EOF'
           version: 0.0
           os: linux
           files:
             - source: /
               destination: /var/www/app
           EOF
-          echo "hello world" > deploy-app/index.html
+          echo "hello world" > deploy-app-zipflags/index.html
 
       - id: action
         uses: .
         with:
           s3_bucket: my-test-bucket
           s3_folder: my-test-folder
-          directory: deploy-app
+          directory: deploy-app-zipflags
           codedeploy_name: my-app
           codedeploy_group: my-group
+          custom_zip_flags: '-9'
           dry_run: 'true'
 
       - name: Assert zip_filename output is set

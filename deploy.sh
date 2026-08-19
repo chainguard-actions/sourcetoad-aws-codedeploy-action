@@ -167,9 +167,11 @@ if [ -z "$INPUT_ARCHIVE" ]; then
         cd "$DIR_TO_ZIP";
     fi
 
-    # Read custom zip flags into an array to avoid unquoted word-splitting injection
-    read -ra CUSTOM_ZIP_FLAGS_ARRAY <<< "$INPUT_CUSTOM_ZIP_FLAGS"
-    zip "${CUSTOM_ZIP_FLAGS_ARRAY[@]}" -r --quiet "$ZIP_FILENAME" . -x "@$EXCLUSION_FILE"
+    custom_zip_flags=()
+    if [ -n "$INPUT_CUSTOM_ZIP_FLAGS" ]; then
+        read -ra custom_zip_flags <<< "$INPUT_CUSTOM_ZIP_FLAGS"
+    fi
+    zip "${custom_zip_flags[@]}" -r --quiet "$ZIP_FILENAME" . -x "@$EXCLUSION_FILE"
     if [ ! -f "$ZIP_FILENAME" ]; then
         echo "::error::$ZIP_FILENAME was not generated properly (zip generation failed)."
         exit 1;

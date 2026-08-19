@@ -1,4 +1,4 @@
-name: Test dry-run with pre-built archive
+name: Test dry-run with pre-existing archive
 on:
   workflow_dispatch:
 jobs:
@@ -6,29 +6,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Create pre-built archive
+
+      - name: Create a pre-existing zip archive with appspec.yml
         run: |
-          echo "app content" > /tmp/app.txt
-          zip /tmp/my-archive.zip /tmp/app.txt
+          mkdir -p /tmp/archive-content
+          cat > /tmp/archive-content/appspec.yml <<'EOF'
+          version: 0.0
+          os: linux
+          files:
+            - source: /
+              destination: /var/www/app
+          EOF
+          echo "app content" > /tmp/archive-content/app.js
+          cd /tmp/archive-content
+          zip -r /tmp/my-release.zip .
+          # Copy the archive into the workspace so the Docker action can find it
+          cp /tmp/my-release.zip "$GITHUB_WORKSPACE/my-release.zip"
+
       - id: action
         uses: .
         with:
-          aws_access_key: 'AKIAIOSFODNN7EXAMPLE'
-          aws_secret_key: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
-          aws_region: 'us-east-1'
-          s3_bucket: 'my-test-bucket'
-          s3_folder: 'my-test-folder'
-          codedeploy_name: 'my-app'
-          codedeploy_group: 'my-group'
-          archive: '/tmp/my-archive.zip'
+          s3_bucket: my-test-bucket
+          s3_folder: my-test-folder
+          archive: my-release.zip
+          codedeploy_name: my-app
+          codedeploy_group: my-group
           dry_run: 'true'
-      - name: Assert zip_filename output is set
+
+      - name: Assert zip_filename output matches provided archive name
         env:
-          ZIP_FILENAME: ${{ steps.action.outputs.zip_filename }}
+          ACTUAL: ${{ steps.action.outputs.zip_filename }}
         run: |
-          echo "zip_filename: $ZIP_FILENAME"
-          if [ -z "$ZIP_FILENAME" ]; then
-            echo "FAIL: expected zip_filename to be non-empty"
+          echo "actual zip_filename: $ACTUAL"
+          if [ "$ACTUAL" != "my-release.zip" ]; then
+            echo "FAIL: expected zip_filename to be 'my-release.zip', got: $ACTUAL"
             exit 1
           fi
-          echo "PASS"
+          echo "PASS: zip_filename=$ACTUAL"

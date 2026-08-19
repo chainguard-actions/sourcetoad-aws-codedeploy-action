@@ -1,4 +1,4 @@
-name: Test dry-run basic usage
+name: Test dry-run with excluded files
 on:
   workflow_dispatch:
 jobs:
@@ -7,7 +7,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Create deploy directory with appspec.yml
+      - name: Create deploy directory with appspec.yml and files to exclude
         run: |
           mkdir -p deploy-app
           cat > deploy-app/appspec.yml <<'EOF'
@@ -17,7 +17,9 @@ jobs:
             - source: /
               destination: /var/www/app
           EOF
-          echo "hello world" > deploy-app/index.html
+          echo "app content" > deploy-app/app.js
+          echo "secret content" > deploy-app/secrets.env
+          echo "test content" > deploy-app/test.log
 
       - id: action
         uses: .
@@ -27,6 +29,7 @@ jobs:
           directory: deploy-app
           codedeploy_name: my-app
           codedeploy_group: my-group
+          excluded_files: 'secrets.env test.log'
           dry_run: 'true'
 
       - name: Assert zip_filename output is set
